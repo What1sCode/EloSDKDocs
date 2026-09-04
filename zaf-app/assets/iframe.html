@@ -39,6 +39,25 @@
       var FIXED_HEIGHT = '900px';
       var docsOrigin = null;
 
+      // Dictionary of recognized Elo SDK domain keywords & aliases
+      var SDK_KEYWORDS = [
+        // Peripherals & Modules
+        'nfc', 'rfid', 'mifare', 'contactless', 'smartcard', 'cardreader',
+        'barcode', 'scanner', 'bcr', 'symbology', 'scan', 'camera', 'aimer',
+        'led', 'light', 'lightbar', 'statuslight', 'illumination', 'rgb', 'color',
+        'drawer', 'cashdrawer', 'cash', 'paypoint', 'till',
+        'printer', 'receipt', 'posprinter', 'thermal', 'cutter',
+        'msr', 'magstripe', 'swipe', 'fingerprint', 'biometric',
+        'cfd', 'display', 'screen', 'monitor', 'customerfacing',
+        // System & Kiosk Actions
+        'kiosk', 'lockdown', 'navigation', 'statusbar', 'navbar', 'systemui',
+        'reboot', 'restart', 'power', 'shutdown', 'powerstate', 'boot', 'reset',
+        'eloview', 'cloud', 'provision', 'apk', 'install', 'ota',
+        'ethernet', 'wifi', 'network', 'ip', 'serial', 'usb', 'bluetooth',
+        // Common Programming Entities
+        'callback', 'listener', 'service', 'intent', 'broadcast', 'permission'
+      ];
+
       function setAppHeight() {
         client.invoke('resize', { width: '100%', height: FIXED_HEIGHT });
       }
@@ -49,7 +68,7 @@
         setAppHeight();
       });
 
-      // Listen for Insert into Ticket actions from the inner docs site
+      // Handle insertion actions from inner documentation iframe
       window.addEventListener('message', function (event) {
         if (!docsOrigin || event.origin !== docsOrigin) return;
         var data = event.data;
@@ -60,14 +79,45 @@
         }
       });
 
-      // Retrieve settings & ticket context
+      // Extracts only relevant SDK keywords from ticket subject
+      function extractSdkKeywords(subject) {
+        if (!subject || typeof subject !== 'string') return '';
+
+        // Normalize text: lowercase, remove punctuation and email prefixes
+        var normalized = subject
+          .toLowerCase()
+          .replace(/^(re:|fwd:|\s*\[.*?\])/gi, '')
+          .replace(/[^a-z0-9\s-_]/g, ' ');
+
+        var tokens = normalized.split(/\s+/);
+        var matched = [];
+
+        tokens.forEach(function(token) {
+          if (!token || token.length < 2) return;
+          // Check if token matches or contains any known SDK keyword
+          for (var i = 0; i < SDK_KEYWORDS.length; i++) {
+            var kw = SDK_KEYWORDS[i];
+            if (token === kw || (token.length > 3 && (token.indexOf(kw) !== -1 || kw.indexOf(token) !== -1))) {
+              if (matched.indexOf(kw) === -1) {
+                matched.push(kw);
+              }
+              break;
+            }
+          }
+        });
+
+        // Limit to top 3 most specific keywords to avoid over-filtering
+        return matched.slice(0, 3).join(' ');
+      }
+
+      // Initialize app and load inner docs iframe
       Promise.all([
         client.metadata(),
         client.get('ticket.subject').catch(function() { return {}; })
       ]).then(function (results) {
         var metadata = results[0];
         var ticketData = results[1] || {};
-        var subject = ticketData['ticket.subject'] || '';
+        var rawSubject = ticketData['ticket.subject'] || '';
 
         var docsUrl = (metadata.settings && metadata.settings.docsUrl) ? metadata.settings.docsUrl : '';
         var frame = document.getElementById('docs-frame');
@@ -85,20 +135,14 @@
           docsOrigin = docsUrl;
         }
 
-        // Smart ticket context: Clean subject keywords for suggested search
-        var cleanSubject = subject
-          .replace(/^(re:|fwd:|\s*\[.*?\])/gi, '')
-          .replace(/[^\w\s]/gi, ' ')
-          .trim();
+        var matchedKeywords = extractSdkKeywords(rawSubject);
+        var targetUrl = docsUrl + '/';
 
-        var initialUrl = docsUrl + '/';
-        if (cleanSubject && cleanSubject.length > 2) {
-          // Pass first 3-4 significant words as suggestion
-          var words = cleanSubject.split(/\s+/).slice(0, 3).join(' ');
-          initialUrl += '?suggest=' + encodeURIComponent(words);
+        if (matchedKeywords) {
+          targetUrl += '?suggest=' + encodeURIComponent(matchedKeywords);
         }
 
-        frame.src = initialUrl;
+        frame.src = targetUrl;
 
         frame.onload = function () {
           status.style.display = 'none';
@@ -110,7 +154,7 @@
           status.textContent = 'Could not load documentation at ' + docsUrl;
         };
       }).catch(function (err) {
-        document.getElementById('status').textContent = 'Failed to initialize: ' + (err && err.message ? err.message : err);
+        document.getElementById('status').textContent = 'Failed to initialize Zendesk App: ' + (err && err.message ? err.message : err);
       });
     })();
   </script>
