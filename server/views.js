@@ -138,7 +138,7 @@ function layout(title, content) {
     .card-title:hover {
       text-decoration: underline;
     }
-    .card-sdk {
+    .card-sdk, .card-kind {
       font-size: 10px;
       font-weight: 600;
       background: #e9ebed;
@@ -158,6 +158,7 @@ function layout(title, content) {
     .card-actions {
       display: flex;
       gap: 6px;
+      align-items: center;
     }
     .btn-action {
       background: #ffffff;
@@ -336,10 +337,11 @@ function searchPage() {
                 '    <a class="card-title" href="' + escapeHtml(docUrl) + '">' + escapeHtml(item.name) + '</a>',
                 '    <span class="card-sdk">' + escapeHtml(item.sdk) + '</span>',
                 '  </div>',
-                '  <div class="card-desc">' + escapeHtml(item.description || item.kind || 'Documentation symbol') + '</div>',
+                '  <div class="card-desc">' + escapeHtml(item.description || 'No description available.') + '</div>',
                 '  <div class="card-actions">',
                 '    <a class="btn-action" href="' + escapeHtml(docUrl) + '">View Docs &rarr;</a>',
                 '    <button type="button" class="btn-action btn-insert-link" data-link="' + escapeHtml(fullLinkText) + '">🔗 Insert Link</button>',
+                 (item.kind ? '<span class="card-kind">' + escapeHtml(item.kind) + '</span>' : ''),
                 '  </div>',
                 '</div>'
               ].join('');
