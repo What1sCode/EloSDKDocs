@@ -1,91 +1,85 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html>
 <head>
-<meta charset="utf-8" />
-<title>Elo SDK Docs</title>
-<style>
-  html, body { margin: 0; padding: 0; height: 100%; }
-  #docs-frame { width: 100%; height: 100%; border: 0; display: block; }
-  #status { font: 13px -apple-system, sans-serif; padding: 12px; color: #666; }
-</style>
+  <meta charset="utf-8">
+  <title>Elo SDK Docs</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #ffffff;
+    }
+    #status {
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      color: #68737d;
+    }
+    #docs-frame {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: none;
+      overflow: auto;
+    }
+  </style>
+  <script src="https://static.zdassets.com/zendesk_app_framework_sdk/2.0/zaf_sdk.min.js"></script>
 </head>
 <body>
-<div id="status">Loading Elo SDK Docs…</div>
-<iframe id="docs-frame" style="display:none;" title="Elo SDK Docs"></iframe>
+  <div id="status">Loading Elo SDK Docs...</div>
+  <iframe id="docs-frame" allow="clipboard-write"></iframe>
 
-<script src="https://static.zdassets.com/zendesk_app_framework_sdk/2.0/zaf_sdk.min.js"></script>
-<script>
-(function () {
-  var client = ZAFClient.init();
-  var MIN_HEIGHT = 120;
-  var FALLBACK_HEIGHT = 800; // used only until the docs page's first real measurement arrives
-  var docsOrigin = null;
-  var lastHeight = FALLBACK_HEIGHT;
+  <script>
+    (function () {
+      var client = ZAFClient.init();
+      var FIXED_HEIGHT = '900px';
 
-  // Zendesk's resize() takes a literal pixel height and nothing else —
-  // there's no "fill available space" or percentage mode (confirmed via
-  // Zendesk's own community thread: 100%/100vh on either side of this call
-  // are silently ignored). So the height we hand it has to be a real,
-  // measured number, not a guess, or we're either leaving dead space below
-  // short content or clipping tall content.
-  function resize(px) {
-    lastHeight = Math.max(Math.round(px), MIN_HEIGHT);
-    client.invoke('resize', { width: '100%', height: lastHeight + 'px' });
-  }
+      function setAppHeight() {
+        client.invoke('resize', { width: '100%', height: FIXED_HEIGHT });
+      }
 
-  // The docs page (Railway, a different origin from this Zendesk-hosted
-  // wrapper) can't be measured directly — cross-origin — so it measures its
-  // own scrollHeight and posts it up. Only accept messages from the exact
-  // docsUrl origin we were configured with.
-  window.addEventListener('message', function (event) {
-    if (!docsOrigin || event.origin !== docsOrigin) return;
-    var data = event.data;
-    if (data && data.source === 'elo-sdk-docs' && typeof data.height === 'number') {
-      resize(data.height);
-    }
-  });
+      // Initial resize call
+      setAppHeight();
 
-  // Re-assert the last known height when this app tab regains focus —
-  // switching tickets can otherwise leave a stale/zero measurement in
-  // place until the docs page happens to re-report on its own.
-  client.on('app.activated', function () {
-    resize(lastHeight);
-  });
+      // Re-apply height when ticket/app tab is focused or switched
+      client.on('app.activated', function () {
+        setAppHeight();
+      });
 
-  client.get('currentAccount').then(function () {
-    return client.metadata();
-  }).then(function (metadata) {
-    var docsUrl = (metadata.settings && metadata.settings.docsUrl || '').replace(/\/+$/, '');
-    var status = document.getElementById('status');
-    var frame = document.getElementById('docs-frame');
+      // Load documentation URL from app settings
+      client.metadata().then(function (metadata) {
+        var docsUrl = (metadata.settings && metadata.settings.docsUrl) ? metadata.settings.docsUrl : '';
+        var frame = document.getElementById('docs-frame');
+        var status = document.getElementById('status');
 
-    if (!docsUrl) {
-      status.textContent = 'This app is missing its "docsUrl" setting. An admin needs to set it in the app configuration (Admin Center > Apps).';
-      return;
-    }
+        if (!docsUrl) {
+          status.textContent = 'Configuration error: "docsUrl" setting is missing.';
+          return;
+        }
 
-    try {
-      docsOrigin = new URL(docsUrl).origin;
-    } catch (e) {
-      status.textContent = 'The configured "docsUrl" setting isn\'t a valid URL.';
-      return;
-    }
+        // Clean trailing slash
+        docsUrl = docsUrl.replace(/\/+$/, '');
+        frame.src = docsUrl + '/';
 
-    frame.src = docsUrl + '/';
-    frame.onload = function () {
-      status.style.display = 'none';
-      frame.style.display = 'block';
-      resize(lastHeight);
-    };
-    frame.onerror = function () {
-      status.textContent = 'Could not load the docs site at ' + docsUrl + '. It may be down or the URL may be wrong.';
-    };
-  }).catch(function (err) {
-    document.getElementById('status').textContent = 'Failed to initialize: ' + (err && err.message ? err.message : err);
-  });
+        frame.onload = function () {
+          status.style.display = 'none';
+          frame.style.display = 'block';
+          setAppHeight();
+        };
 
-  resize(FALLBACK_HEIGHT);
-})();
-</script>
+        frame.onerror = function () {
+          status.textContent = 'Could not load documentation at ' + docsUrl + '. Please check the URL or host status.';
+        };
+      }).catch(function (err) {
+        document.getElementById('status').textContent = 'Failed to initialize Zendesk App: ' + (err && err.message ? err.message : err);
+      });
+    })();
+  </script>
 </body>
 </html>
