@@ -21,7 +21,6 @@ try {
   `;
 }
 
-// Server-side HTML escape helper
 function escapeHtml(str) {
   return String(str || '')
     .replace(/&/g, '&amp;')
@@ -31,7 +30,6 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
-// Shared HTML page shell & sidebar styling
 function layout(title, content) {
   return `<!DOCTYPE html>
 <html>
@@ -138,6 +136,10 @@ function layout(title, content) {
     .card-title:hover {
       text-decoration: underline;
     }
+    .card-badges {
+      display: flex;
+      gap: 4px;
+    }
     .card-sdk, .card-kind {
       font-size: 10px;
       font-weight: 600;
@@ -147,6 +149,20 @@ function layout(title, content) {
       border-radius: 3px;
       white-space: nowrap;
       text-transform: uppercase;
+    }
+    .card-kind {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+    .card-sig {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 11px;
+      background: #f1f3f5;
+      padding: 4px 6px;
+      border-radius: 3px;
+      margin: 4px 0 6px 0;
+      word-break: break-all;
+      color: #24292e;
     }
     .card-desc {
       font-size: 12px;
@@ -201,7 +217,6 @@ function layout(title, content) {
 </html>`;
 }
 
-// Landing Page (Home View)
 function landingPage(options = {}) {
   const sdks = options.sdks || [];
   const count = typeof options.documentCount === 'number' ? options.documentCount : sdks.length;
@@ -235,7 +250,6 @@ function landingPage(options = {}) {
   return layout('Elo SDK Docs', content);
 }
 
-// Search Results Page (Dynamic Client-Side View)
 function searchPage() {
   const content = `
     <header>
@@ -282,7 +296,6 @@ function searchPage() {
 
         queryInput.value = q;
 
-        // Populate SDK select dropdown
         fetch('/api/sdks')
           .then(function(r) { return r.json(); })
           .then(function(sdks) {
@@ -301,7 +314,6 @@ function searchPage() {
           return;
         }
 
-        // Fetch search results from /api/search
         var searchUrl = '/api/search?q=' + encodeURIComponent(q);
         if (sdk) searchUrl += '&sdk=' + encodeURIComponent(sdk);
 
@@ -329,19 +341,22 @@ function searchPage() {
             var html = results.map(function(item) {
               var docUrl = item.url || ('/docs/' + item.sdk + '/' + (item.file || 'index.html'));
               var fullLinkText = '[' + (item.sdkName || item.sdk) + ': ' + item.name + '](' + window.location.origin + docUrl + ')';
-              var descriptionText = item.description || 'No description snippet available.';
+              var descriptionText = item.description || 'Documentation symbol.';
 
               return [
                 '<div class="card">',
                 '  <div class="card-header">',
                 '    <a class="card-title" href="' + escapeHtml(docUrl) + '">' + escapeHtml(item.name) + '</a>',
-                '    <span class="card-sdk">' + escapeHtml(item.sdk) + '</span>',
+                '    <div class="card-badges">',
+                '      <span class="card-sdk">' + escapeHtml(item.sdk) + '</span>',
+                       (item.kind ? '<span class="card-kind">' + escapeHtml(item.kind) + '</span>' : ''),
+                '    </div>',
                 '  </div>',
+                (item.signature ? '<div class="card-sig">' + escapeHtml(item.signature) + '</div>' : ''),
                 '  <div class="card-desc">' + escapeHtml(descriptionText) + '</div>',
                 '  <div class="card-actions">',
                 '    <a class="btn-action" href="' + escapeHtml(docUrl) + '">View Docs &rarr;</a>',
                 '    <button type="button" class="btn-action btn-insert-link" data-link="' + escapeHtml(fullLinkText) + '">🔗 Insert Link</button>',
-                (item.kind ? '    <span class="card-kind">' + escapeHtml(item.kind) + '</span>' : ''),
                 '  </div>',
                 '</div>'
               ].join('');
@@ -353,7 +368,6 @@ function searchPage() {
             resultsContainer.innerHTML = '<div class="no-results-card"><p style="color: #c72a1c;">Error loading results: ' + escapeHtml(err.message) + '</p></div>';
           });
 
-        // Event delegation for "Insert Link" buttons
         document.addEventListener('click', function(e) {
           if (e.target && e.target.classList.contains('btn-insert-link')) {
             e.preventDefault();
