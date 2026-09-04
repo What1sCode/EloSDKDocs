@@ -4,25 +4,50 @@ const cheerio = require('cheerio');
 const MiniSearch = require('minisearch');
 const { listSdks, DOCS_ROOT } = require('./sdks');
 
+// Domain synonyms mapping developer intent to SDK terminology
+const SYNONYMS = {
+  nfc: ['rfid', 'contactless', 'card', 'mifare', 'smartcard', 'reader'],
+  rfid: ['nfc', 'contactless', 'cardreader', 'badge', 'reader'],
+  led: ['light', 'rgb', 'color', 'lightbar', 'status', 'illumination', 'indicator', 'ledcolor'],
+  light: ['led', 'rgb', 'color', 'lightbar', 'indicator', 'status'],
+  color: ['rgb', 'led', 'light', 'hex'],
+  scanner: ['barcode', 'bcr', 'symbology', 'camera', 'scan', 'decode', 'aimer', 'illumination'],
+  barcode: ['scanner', 'bcr', 'symbology', 'scan', 'decode'],
+  reboot: ['power', 'restart', 'shutdown', 'powerstate', 'boot', 'reset'],
+  power: ['reboot', 'restart', 'shutdown', 'sleep', 'wake'],
+  drawer: ['cashdrawer', 'cash', 'money', 'kickout', 'paypoint', 'till', 'open'],
+  printer: ['receipt', 'thermal', 'posprinter', 'escpos', 'paper', 'cutter', 'print'],
+  kiosk: ['lockdown', 'navigation', 'statusbar', 'kioskmode', 'systemui', 'home', 'pinning'],
+  navigation: ['kiosk', 'statusbar', 'systemui', 'navbar', 'backbutton'],
+  eloview: ['enterprise', 'cloud', 'provision', 'devicecontrol', 'setting', 'app']
+};
+
 function createSearchIndex() {
   const documents = [];
   let docCounter = 0;
   const sdks = typeof listSdks === 'function' ? listSdks() : [];
 
-  // Helper to extract a clean text preview snippet from HTML content
-  function createSnippet(htmlContent) {
-    if (!htmlContent) return '';
-    const text = htmlContent
+  function cleanText(html) {
+    if (!html) return '';
+    return html
       .replace(/<br\s*\/?>/gi, ' ')
       .replace(/<p[^>]*>/gi, ' ')
       .replace(/<li[^>]*>/gi, ' ')
       .replace(/<\/p>|<\/li>|<\/div>|<\/tr>|<\/th>|<\/td>/gi, ' ')
-      .replace(/<[^>]+>/g, '') // Strip all remaining tags
+      .replace(/<[^>]+>/g, '')
       .replace(/&nbsp;/g, ' ')
-      .replace(/\s+/g, ' ')      // Collapse whitespace
+      .replace(/\s+/g, ' ')
       .trim();
+  }
 
-    return text.length > 250 ? text.substring(0, 250) + '...' : text;
+  // Tokenizer splitting camelCase, snake_case, and standard punctuation
+  function customTokenizer(text) {
+    if (!text) return [];
+    const splitText = text
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+      .replace(/[_\-\.\/\\#\(\),:;]/g, ' ');
+    return MiniSearch.getDefault('tokenize')(splitText);
   }
 
   sdks.forEach(sdk => {
@@ -43,42 +68,67 @@ function createSearchIndex() {
             const html = fs.readFileSync(fullPath, 'utf-8');
             const $ = cheerio.load(html);
 
-            // 1. Index Page Title & Overview Snippet
-            const pageTitle = $('title').text().replace(/^(Overview|Index|Class)\s*-\s*/i, '').trim();
-            const pageDescription = createSnippet($('body').html());
+            // 1. Extract Class & Package Hierarchy
+            const rawTitle = $('title').text().replace(/^(Overview|Index|Class)\s*-\s*/i, '').trim();
+            const className = $('h2.title, .header .title').first().text().replace(/^Class\s+/i, '').trim() || rawTitle || entry.name;
+            const packageName = $('.header .subTitle, .sub-title').first().text().trim();
+            const classOverview = cleanText($('.description .block, .class-description').first().html());
+            const fullBodyText = cleanText($('body').html());
 
+            // Index Class / Page Level Document
             documents.push({
               id: `doc_${++docCounter}`,
-              name: pageTitle || entry.name,
-              kind: 'Page',
-              description: pageDescription,
+              name: className,
+              simpleName: className,
+              className: className,
+              packageName: packageName,
+              kind: 'Class',
+              signature: packageName ? `${packageName}.${className}` : className,
+              description: classOverview.substring(0, 300) || fullBodyText.substring(0, 300),
+              fullText: `${className} ${packageName} ${classOverview} ${sdk.name}`,
               sdk: sdk.slug,
               sdkName: sdk.name,
               url: fileUrl
             });
 
-            // 2. Index Methods, Fields, and Constants
-            $('table.memberSummary tr, table.overviewSummary tr, table.typeSummary tr').each((idx, el) => {
-              const row = $(el);
-              const rowId = row.attr('id') || row.find('a[name]').attr('name') || row.find('span[id]').attr('id');
-              const nameCell = row.find('th.col-first, td.col-first, .memberNameLink, td:first-child');
-              const descCell = row.find('td.col-last, .col-last, td:last-child');
+            // 2. Deep Index Method & Field Detail Sections
+            const processedAnchors = new Set();
 
-              const name = nameCell.text().replace(/\s+/g, ' ').trim();
-              const description = createSnippet(descCell.html());
+            // Match Javadoc detail blocks (<section class="detail"> or <ul class="blockList">)
+            $('section.detail, .blockList .blockList .blockList, table.memberSummary tr, table.overviewSummary tr').each((_, el) => {
+              const elem = $(el);
+              const anchor = elem.find('a[name]').attr('name') || elem.attr('id') || elem.find('span[id]').attr('id');
+              const heading = elem.find('h3, h4, th.col-first, td.col-first, .memberNameLink').first().text().trim();
+              const signature = elem.find('pre, .memberSignature').first().text().trim() || heading;
+              const descHtml = elem.find('.block, td.col-last, .col-last').first().html();
+              const memberDesc = cleanText(descHtml);
+              const paramText = cleanText(elem.find('dl').text());
 
-              if (name && name.length > 1 && !name.toLowerCase().includes('modifier and type')) {
-                const targetUrl = rowId ? `${fileUrl}#${rowId}` : fileUrl;
+              const cleanName = heading.replace(/\s+/g, ' ').replace(/\(.*\)/, '()').trim();
 
-                documents.push({
-                  id: `doc_${++docCounter}`,
-                  name: name,
-                  kind: 'Method/Field',
-                  description: description,
-                  sdk: sdk.slug,
-                  sdkName: sdk.name,
-                  url: targetUrl
-                });
+              if (cleanName && cleanName.length > 1 && !cleanName.toLowerCase().includes('modifier and type')) {
+                const uniqueKey = `${className}.${cleanName}`;
+                if (!processedAnchors.has(uniqueKey)) {
+                  processedAnchors.add(uniqueKey);
+
+                  const isConstant = signature.includes('static final') || cleanName === cleanName.toUpperCase();
+                  const targetUrl = anchor ? `${fileUrl}#${anchor}` : fileUrl;
+
+                  documents.push({
+                    id: `doc_${++docCounter}`,
+                    name: `${className}.${cleanName}`,
+                    simpleName: cleanName,
+                    className: className,
+                    packageName: packageName,
+                    kind: isConstant ? 'Constant' : 'Method',
+                    signature: signature || `${cleanName}()`,
+                    description: memberDesc ? memberDesc.substring(0, 300) : (classOverview.substring(0, 200) || 'Documentation symbol.'),
+                    fullText: `${cleanName} ${className} ${packageName} ${signature} ${memberDesc} ${paramText} ${sdk.name}`,
+                    sdk: sdk.slug,
+                    sdkName: sdk.name,
+                    url: targetUrl
+                  });
+                }
               }
             });
           } catch (e) {
@@ -91,14 +141,24 @@ function createSearchIndex() {
     walkDir(sdkPath);
   });
 
-  console.log(`[searchIndex] Successfully indexed ${documents.length} unique items across ${sdks.length} SDK(s).`);
+  console.log(`[searchIndex] Deep index built: ${documents.length} symbols across ${sdks.length} SDK(s).`);
 
   const miniSearch = new MiniSearch({
-    fields: ['name', 'description', 'sdkName'],
-    storeFields: ['name', 'kind', 'description', 'sdk', 'sdkName', 'url'],
+    fields: ['name', 'simpleName', 'className', 'signature', 'description', 'fullText', 'sdkName'],
+    storeFields: ['name', 'className', 'kind', 'signature', 'description', 'sdk', 'sdkName', 'url'],
+    tokenize: customTokenizer,
     searchOptions: {
-      boost: { name: 2 },
-      fuzzy: 0.2
+      boost: {
+        simpleName: 6,
+        name: 5,
+        className: 4,
+        signature: 3,
+        description: 1.5,
+        fullText: 1
+      },
+      prefix: true,
+      fuzzy: 0.2,
+      combineWith: 'OR'
     }
   });
 
@@ -108,9 +168,23 @@ function createSearchIndex() {
     documentCount: documents.length,
     search: (query, options = {}) => {
       if (!query || !query.trim()) return [];
-      const results = miniSearch.search(query, {
+
+      const rawTerms = query.toLowerCase().trim().split(/\s+/);
+      const searchTerms = new Set(rawTerms);
+
+      // Expand query with domain synonyms
+      rawTerms.forEach(term => {
+        if (SYNONYMS[term]) {
+          SYNONYMS[term].forEach(syn => searchTerms.add(syn));
+        }
+      });
+
+      const expandedQuery = Array.from(searchTerms).join(' ');
+
+      const results = miniSearch.search(expandedQuery, {
         filter: options.sdk ? (doc) => doc.sdk === options.sdk : undefined
       });
+
       return results.slice(0, 50);
     }
   };
