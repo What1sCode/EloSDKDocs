@@ -262,7 +262,6 @@ function searchPage() {
 
     <script>
       (function() {
-        // Client-side HTML escaper to safely render search output in the DOM
         function escapeHtml(str) {
           return String(str || '')
             .replace(/&/g, '&amp;')
@@ -283,7 +282,7 @@ function searchPage() {
 
         queryInput.value = q;
 
-        // Populate SDK select dropdown from /api/sdks
+        // Populate SDK select dropdown
         fetch('/api/sdks')
           .then(function(r) { return r.json(); })
           .then(function(sdks) {
@@ -330,6 +329,7 @@ function searchPage() {
             var html = results.map(function(item) {
               var docUrl = item.url || ('/docs/' + item.sdk + '/' + (item.file || 'index.html'));
               var fullLinkText = '[' + (item.sdkName || item.sdk) + ': ' + item.name + '](' + window.location.origin + docUrl + ')';
+              var descriptionText = item.description || 'No description snippet available.';
 
               return [
                 '<div class="card">',
@@ -337,11 +337,11 @@ function searchPage() {
                 '    <a class="card-title" href="' + escapeHtml(docUrl) + '">' + escapeHtml(item.name) + '</a>',
                 '    <span class="card-sdk">' + escapeHtml(item.sdk) + '</span>',
                 '  </div>',
-                '  <div class="card-desc">' + escapeHtml(item.description || 'No description available.') + '</div>',
+                '  <div class="card-desc">' + escapeHtml(descriptionText) + '</div>',
                 '  <div class="card-actions">',
                 '    <a class="btn-action" href="' + escapeHtml(docUrl) + '">View Docs &rarr;</a>',
                 '    <button type="button" class="btn-action btn-insert-link" data-link="' + escapeHtml(fullLinkText) + '">🔗 Insert Link</button>',
-                 (item.kind ? '<span class="card-kind">' + escapeHtml(item.kind) + '</span>' : ''),
+                (item.kind ? '    <span class="card-kind">' + escapeHtml(item.kind) + '</span>' : ''),
                 '  </div>',
                 '</div>'
               ].join('');
@@ -375,7 +375,6 @@ function searchPage() {
   return layout('Search Results - Elo SDK Docs', content);
 }
 
-// Export the functions for server/index.js
 module.exports = {
   landingPage,
   searchPage
