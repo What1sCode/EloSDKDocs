@@ -1,0 +1,5 @@
+com.elo.device
+com.elo.device.enums
+com.elo.device.exceptions
+com.elo.device.inventory
+com.elo.device.peripherals

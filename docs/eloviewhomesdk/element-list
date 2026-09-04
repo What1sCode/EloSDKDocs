@@ -1,0 +1,10 @@
+com.eloview.sdk.accountManager
+com.eloview.sdk.consts
+com.eloview.sdk.eloview
+com.eloview.sdk.infoManager
+com.eloview.sdk.memoryManager
+com.eloview.sdk.networkManager
+com.eloview.sdk.otaManager
+com.eloview.sdk.packageManager
+com.eloview.sdk.peripheralManager
+com.eloview.sdk.systemManager
