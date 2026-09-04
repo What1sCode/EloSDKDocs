@@ -1,10 +1,9 @@
-// Safely import heightReporter if present
+// Safely import heightReporter if present, otherwise provide fallback
 let HEIGHT_REPORTER_SCRIPT = '';
 try {
   const hr = require('./heightReporter');
   HEIGHT_REPORTER_SCRIPT = hr.HEIGHT_REPORTER_SCRIPT || '';
 } catch (e) {
-  // Fallback height reporter if module is missing
   HEIGHT_REPORTER_SCRIPT = `
     <script>
       (function() {
@@ -22,6 +21,7 @@ try {
   `;
 }
 
+// Server-side HTML escape helper
 function escapeHtml(str) {
   return String(str || '')
     .replace(/&/g, '&amp;')
@@ -31,6 +31,7 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+// Shared HTML page shell & sidebar styling
 function layout(title, content) {
   return `<!DOCTYPE html>
 <html>
@@ -219,7 +220,7 @@ function landingPage(options = {}) {
     <main>
       <form class="search-box" action="/search" method="get">
         <div class="search-input-wrap">
-          <input type="search" name="q" placeholder="Search classes, methods, peripherals..." value="${escapeHtml(suggestedQuery)}" autofocus required />
+          <input type="search" name="q" placeholder="Search classes, methods, peripherals..." value="${escapeHtml(suggestedQuery)}" required />
           <button type="submit" class="btn-search">Search</button>
         </div>
         <select name="sdk">
@@ -260,6 +261,16 @@ function searchPage() {
 
     <script>
       (function() {
+        // Client-side HTML escaper to safely render search output in the DOM
+        function escapeHtml(str) {
+          return String(str || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        }
+
         var params = new URLSearchParams(window.location.search);
         var q = params.get('q') || '';
         var sdk = params.get('sdk') || '';
@@ -296,7 +307,7 @@ function searchPage() {
 
         fetch(searchUrl)
           .then(function(res) {
-            if (!res.ok) throw new Error('Search failed (' + res.status + ')');
+            if (!res.ok) throw new Error('Search request returned status ' + res.status);
             return res.json();
           })
           .then(function(results) {
@@ -362,7 +373,7 @@ function searchPage() {
   return layout('Search Results - Elo SDK Docs', content);
 }
 
-// Export exact function names expected by server/index.js
+// Export the functions for server/index.js
 module.exports = {
   landingPage,
   searchPage
