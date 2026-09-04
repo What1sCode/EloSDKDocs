@@ -22,7 +22,6 @@ try {
 
 const BODY_OPEN_RE = /<body([^>]*)>/i;
 
-// Responsive sidebar styles to prevent horizontal scrollbars on method tables/code
 const RESPONSIVE_SIDEBAR_CSS = `
 <style>
   /* Base typography & sidebar sizing */
@@ -30,10 +29,25 @@ const RESPONSIVE_SIDEBAR_CSS = `
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
     font-size: 13px !important;
     line-height: 1.45 !important;
-    padding-top: 52px !important; /* space for sticky banner */
+    padding-top: 52px !important; /* clearance for sticky banner */
     margin: 0 !important;
     background-color: #ffffff !important;
     color: #2f3941 !important;
+  }
+
+  /* Target Element Highlighting Animation */
+  :target, .elo-highlight-target {
+    background-color: #fff3cd !important;
+    border-left: 4px solid #1f73b7 !important;
+    padding-left: 6px !important;
+    transition: background-color 2s ease-out;
+    animation: eloHighlightPulse 3s ease-out;
+  }
+
+  @keyframes eloHighlightPulse {
+    0% { background-color: #ffe082; transform: scale(1.01); }
+    50% { background-color: #fff9c4; }
+    100% { background-color: #fff3cd; transform: scale(1); }
   }
 
   /* Wrap long method signatures & pre tags */
@@ -133,11 +147,10 @@ const RESPONSIVE_SIDEBAR_CSS = `
 </style>
 `;
 
-// Script injected into Javadoc pages to handle ticket insertion & link sanitization
 const INTERACTIVE_SCRIPT = `
 <script>
   (function() {
-    // Prevent target="_top" from breaking out of Zendesk frame
+    // Sanitize frame targets
     document.querySelectorAll('a[target="_top"], a[target="_parent"]').forEach(function(link) {
       link.setAttribute('target', '_self');
     });
@@ -163,11 +176,34 @@ const INTERACTIVE_SCRIPT = `
       });
       pre.appendChild(btn);
     });
+
+    // Auto-scroll and highlight target anchor element with banner clearance
+    function highlightCurrentHash() {
+      if (!window.location.hash) return;
+      var targetId = window.location.hash.substring(1);
+      var targetEl = document.getElementById(targetId) || document.querySelector('a[name="' + targetId + '"]');
+      
+      if (targetEl) {
+        // If it's an anchor tag, target its parent block/row
+        var parentBlock = targetEl.closest('tr, li, div.block, dl') || targetEl;
+        parentBlock.classList.add('elo-highlight-target');
+        
+        // Smooth scroll with 60px clearance for sticky banner
+        var rect = parentBlock.getBoundingClientRect();
+        var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        window.scrollTo({
+          top: rect.top + scrollTop - 60,
+          behavior: 'smooth'
+        });
+      }
+    }
+
+    window.addEventListener('load', highlightCurrentHash);
+    window.addEventListener('hashchange', highlightCurrentHash);
   })();
 </script>
 `;
 
-// Checks if an HTML file is a narrow Javadoc nav frame pane (e.g., allclasses-frame.html)
 function isNavFramePane(relPath) {
   if (!relPath) return false;
   const basename = path.basename(relPath).toLowerCase();
@@ -182,13 +218,11 @@ function isNavFramePane(relPath) {
   );
 }
 
-// Strips target="_top", "_parent", and "classFrame" to keep links within the iframe
 function stripAllTargetAttributes(html) {
   if (typeof html !== 'string') return html;
   return html.replace(/\btarget\s*=\s*["']?(_top|_parent|classFrame)["']?/gi, 'target="_self"');
 }
 
-// Builds the top persistent navigation banner
 function buildBanner(sdkName) {
   return `
     <div class="elo-docs-sticky-banner">
@@ -203,7 +237,6 @@ function buildBanner(sdkName) {
   `;
 }
 
-// Injects the responsive CSS, top banner, and scripts into a Javadoc body
 function injectBodyBanner(html, sdk) {
   if (typeof html !== 'string') return html;
   const sdkName = typeof sdk === 'object' && sdk !== null ? (sdk.name || sdk.slug || '') : (sdk || '');
@@ -214,7 +247,6 @@ function injectBodyBanner(html, sdk) {
   });
 }
 
-// Export all functions expected by server/index.js
 module.exports = {
   isNavFramePane,
   stripAllTargetAttributes,
