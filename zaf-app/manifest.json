@@ -1,0 +1,31 @@
+{
+  "name": "Elo SDK Docs",
+  "author": {
+    "name": "Elo Support",
+    "email": "techrho@protonmail.com"
+  },
+  "defaultLocale": "en",
+  "private": true,
+  "location": {
+    "zendesk": {
+      "ticket_sidebar": {
+        "url": "assets/iframe.html",
+        "flexible": true
+      },
+      "top_bar": {
+        "url": "assets/iframe.html",
+        "flexible": true
+      }
+    }
+  },
+  "version": "1.0.0",
+  "frameworkVersion": "2.0",
+  "parameters": [
+    {
+      "name": "docsUrl",
+      "type": "text",
+      "required": true,
+      "helpText": "Base URL of the Railway-hosted Elo SDK Docs site (no trailing slash), e.g. https://elo-sdk-docs.up.railway.app"
+    }
+  ]
+}

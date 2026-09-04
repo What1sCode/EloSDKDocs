@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Elo SDK Docs</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; }
+  #docs-frame { width: 100%; height: 100%; border: 0; display: block; }
+  #status { font: 13px -apple-system, sans-serif; padding: 12px; color: #666; }
+</style>
+</head>
+<body>
+<div id="status">Loading Elo SDK Docs…</div>
+<iframe id="docs-frame" style="display:none;" title="Elo SDK Docs"></iframe>
+
+<script src="https://static.zdassets.com/zendesk_app_framework_sdk/2.0/zaf_sdk.min.js"></script>
+<script>
+(function () {
+  var client = ZAFClient.init();
+
+  function resize() {
+    // ticket_sidebar apps report a usable height; top_bar apps render in a
+    // fixed-size popover. Either way, ask for as much room as we're given.
+    client.invoke('resize', { width: '100%', height: '600px' });
+  }
+
+  client.get('currentAccount').then(function () {
+    return client.metadata();
+  }).then(function (metadata) {
+    var docsUrl = (metadata.settings && metadata.settings.docsUrl || '').replace(/\/+$/, '');
+    var status = document.getElementById('status');
+    var frame = document.getElementById('docs-frame');
+
+    if (!docsUrl) {
+      status.textContent = 'This app is missing its "docsUrl" setting. An admin needs to set it in the app configuration (Admin Center > Apps).';
+      return;
+    }
+
+    frame.src = docsUrl + '/';
+    frame.onload = function () {
+      status.style.display = 'none';
+      frame.style.display = 'block';
+      resize();
+    };
+    frame.onerror = function () {
+      status.textContent = 'Could not load the docs site at ' + docsUrl + '. It may be down or the URL may be wrong.';
+    };
+  }).catch(function (err) {
+    document.getElementById('status').textContent = 'Failed to initialize: ' + (err && err.message ? err.message : err);
+  });
+
+  resize();
+})();
+</script>
+</body>
+</html>

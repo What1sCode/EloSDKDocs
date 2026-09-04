@@ -1,0 +1,14 @@
+{
+  "app": {
+    "name": "Elo SDK Docs",
+    "short_description": "Search Elo SDK documentation without leaving the ticket.",
+    "long_description": "Embeds the searchable Elo SDK docs site (EloView Device Level, PayPoint Peripherals, SLK, and other SDKs) in the ticket sidebar and top bar, so agents can look up classes/methods while working a ticket.",
+    "installation_instructions": "After installing, open this app's settings and set 'docsUrl' to the Elo SDK Docs site's URL (e.g. https://elo-sdk-docs-production.up.railway.app, no trailing slash).",
+    "parameters": {
+      "docsUrl": {
+        "label": "Docs site URL",
+        "helpText": "Base URL of the Railway-hosted Elo SDK Docs site (no trailing slash), e.g. https://elo-sdk-docs-production.up.railway.app"
+      }
+    }
+  }
+}

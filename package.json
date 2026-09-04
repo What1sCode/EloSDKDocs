@@ -1,0 +1,21 @@
+{
+  "name": "elo-sdk-docs",
+  "version": "1.0.0",
+  "description": "Unified, searchable hosting for Elo SDK documentation (javadoc/help exports), embeddable inside Zendesk.",
+  "private": true,
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js"
+  },
+  "engines": {
+    "node": ">=20.18.1"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "express": "^4.19.2",
+    "express-basic-auth": "^1.2.1",
+    "helmet": "^7.1.0",
+    "minisearch": "^6.3.0"
+  }
+}
