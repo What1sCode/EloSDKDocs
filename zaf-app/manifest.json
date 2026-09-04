@@ -1,31 +1,31 @@
 {
   "name": "Elo SDK Docs",
   "author": {
-    "name": "Elo Support",
-    "email": "techrho@protonmail.com"
+    "name": "Zebra Technologies",
+    "email": "RR5736@zebra.com"
   },
   "defaultLocale": "en",
   "private": true,
   "location": {
-    "zendesk": {
+    "support": {
       "ticket_sidebar": {
         "url": "assets/iframe.html",
         "flexible": true
       },
       "top_bar": {
-        "url": "assets/iframe.html",
-        "flexible": true
+        "url": "assets/iframe.html"
       }
     }
   },
-  "version": "1.2.1",
+  "version": "1.2.2",
   "frameworkVersion": "2.0",
   "parameters": [
     {
       "name": "docsUrl",
       "type": "text",
       "required": true,
-      "helpText": "Base URL of the Railway-hosted Elo SDK Docs site (no trailing slash), e.g. https://elo-sdk-docs.up.railway.app"
+      "secure": false,
+      "default": "https://elo-sdk-docs-production.up.railway.app"
     }
   ]
 }
