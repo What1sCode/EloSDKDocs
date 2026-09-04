@@ -1,96 +1,250 @@
 const { HEIGHT_REPORTER_SCRIPT } = require('./heightReporter');
 
-const BODY_OPEN_RE = /<body([^>]*)>/i;
-
-// Classic javadoc's nav panes (packageListFrame / packageFrame — "All
-// Packages" and "All Classes" in the left column) are always served from a
-// file ending in "-frame.html" (overview-frame.html, allclasses-frame.html,
-// or a per-package .../package-frame.html) — that's true no matter how deep
-// the user clicks around inside them. Nothing else uses that naming
-// pattern, and nothing in that pattern is ever shown as main/right-frame
-// content, so it's a reliable, request-independent way to tell "this is a
-// tiny nav pane" from "this is the main content the user is reading" —
-// unlike browser signals such as Sec-Fetch-Dest, which stops helping after
-// the first click within a frame.
-const NAV_FRAME_FILE_RE = /-frame\.html$/i;
-
-function isNavFramePane(relPath) {
-  return NAV_FRAME_FILE_RE.test(relPath);
-}
-
-function escapeHtml(s) {
-  return String(s)
+function escapeHtml(str) {
+  return String(str || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
-// The vendored javadoc pages have zero awareness of this app — clicking a
-// class/method link just navigates the browser straight to another static
-// page, with no link back to our landing page or search. This bar restores
-// that: home, unified search, and this SDK's own doc root.
-//
-// Deliberately no target attribute: this whole site is typically loaded
-// inside Zendesk's embedded app iframe, and a plain link navigates
-// whichever frame it's currently sitting in (the embed's own iframe, or a
-// nested classFrame within an old-style frameset) — never breaking out to
-// the top-level Zendesk tab or forcing a new browser tab, which is what an
-// explicit target="_top"/"_blank" would do.
-function buildBanner(sdk) {
-  return `<div style="box-sizing:border-box;width:100%;height:32px;margin:0;position:sticky;top:0;z-index:2147483647;display:flex;align-items:center;gap:14px;padding:0 12px;background:#1a1a1a;color:#eee;font:13px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;border-bottom:2px solid #0b5fff;overflow:hidden;white-space:nowrap;">
-  <a href="/" style="color:#fff;text-decoration:none;font-weight:600;">🏠 Elo SDK Docs</a>
-  <a href="/search" style="color:#9cc3ff;text-decoration:none;">🔍 Search</a>
-  <a href="/docs/${escapeHtml(sdk.slug)}/index.html" style="color:#9cc3ff;text-decoration:none;">${escapeHtml(sdk.name)} home</a>
-</div>`;
+function layout(title, content) {
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${escapeHtml(title)}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      color: #2f3941;
+      background: #ffffff;
+    }
+    header {
+      margin-bottom: 12px;
+      border-bottom: 1px solid #e9ebed;
+      padding-bottom: 10px;
+    }
+    h1 {
+      font-size: 16px;
+      margin: 0 0 4px 0;
+      color: #1f73b7;
+    }
+    .stats {
+      font-size: 11px;
+      color: #68737d;
+      margin: 0;
+    }
+    .search-box {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .search-input-wrap {
+      display: flex;
+      gap: 6px;
+    }
+    input[type="search"] {
+      flex: 1;
+      padding: 8px 10px;
+      font-size: 13px;
+      border: 1px solid #d8dcde;
+      border-radius: 4px;
+      outline: none;
+    }
+    input[type="search"]:focus {
+      border-color: #1f73b7;
+      box-shadow: 0 0 0 2px rgba(31,115,183,0.2);
+    }
+    select {
+      padding: 6px 8px;
+      font-size: 12px;
+      border: 1px solid #d8dcde;
+      border-radius: 4px;
+      background: #fff;
+    }
+    .btn-search {
+      padding: 8px 12px;
+      background: #1f73b7;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .card {
+      border: 1px solid #e9ebed;
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 8px;
+      background: #fafafa;
+      transition: border-color 0.15s ease;
+    }
+    .card:hover {
+      border-color: #1f73b7;
+      background: #fff;
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 4px;
+    }
+    .card-title {
+      font-weight: 600;
+      font-size: 13px;
+      color: #1f73b7;
+      text-decoration: none;
+    }
+    .card-title:hover {
+      text-decoration: underline;
+    }
+    .card-sdk {
+      font-size: 10px;
+      font-weight: 600;
+      background: #e9ebed;
+      color: #49545c;
+      padding: 2px 6px;
+      border-radius: 3px;
+      text-transform: uppercase;
+    }
+    .card-desc {
+      font-size: 12px;
+      color: #49545c;
+      margin: 4px 0 6px 0;
+      line-height: 1.35;
+    }
+    .card-actions {
+      display: flex;
+      gap: 6px;
+    }
+    .btn-action {
+      background: #ffffff;
+      border: 1px solid #d8dcde;
+      border-radius: 3px;
+      padding: 3px 8px;
+      font-size: 11px;
+      color: #2f3941;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .btn-action:hover {
+      background: #f8f9f9;
+      border-color: #1f73b7;
+      color: #1f73b7;
+    }
+    .no-results-card {
+      padding: 24px 12px;
+      text-align: center;
+      background: #f8f9f9;
+      border-radius: 6px;
+      border: 1px dashed #d8dcde;
+      color: #68737d;
+    }
+  </style>
+</head>
+<body>
+  ${content}
+  ${HEIGHT_REPORTER_SCRIPT}
+  <script>
+    document.addEventListener('click', function(e) {
+      if (e.target.classList.contains('btn-insert-link')) {
+        e.preventDefault();
+        var linkText = e.target.getAttribute('data-link');
+        window.parent.postMessage({
+          source: 'elo-sdk-docs',
+          action: 'insert_ticket',
+          text: linkText
+        }, '*');
+        e.target.textContent = '✅ Inserted';
+        setTimeout(function() { e.target.textContent = '🔗 Insert Link'; }, 2000);
+      }
+    });
+  </script>
+</body>
+</html>`;
 }
 
-// Search results deep-link straight to a method's own anchor
-// (#setNfcLedMode(...)) — without this, the browser's fragment-scroll
-// would land the heading right under the sticky 32px banner, hiding it.
-// scroll-padding-top applies to whichever element is the scrolling box
-// (the root <html> for a normal page), which is why it's a global <style>
-// rather than a style on the banner div itself.
-const SCROLL_OFFSET_STYLE = '<style>html{scroll-padding-top:40px;}</style>';
-
-// Injects the banner at the top of <body>. No-ops on pages without a
-// <body> tag — that includes old-style javadoc's frameset index.html,
-// which has no body of its own to inject into (its two child panes get
-// handled individually as their own requests).
-function injectBodyBanner(html, sdk) {
-  if (!BODY_OPEN_RE.test(html)) return html;
-  return html.replace(BODY_OPEN_RE, (match, attrs) => `<body${attrs}>${SCROLL_OFFSET_STYLE}${buildBanner(sdk)}${HEIGHT_REPORTER_SCRIPT}`);
+function renderLanding(sdks, docCount, suggestedQuery) {
+  const content = `
+    <header>
+      <h1>Elo SDK Docs</h1>
+      <p class="stats">${sdks.length} SDKs &middot; ${docCount} searchable items</p>
+    </header>
+    <main>
+      <form class="search-box" action="/search" method="get">
+        <div class="search-input-wrap">
+          <input type="search" name="q" placeholder="Search classes, methods, peripherals..." value="${escapeHtml(suggestedQuery || '')}" autofocus />
+          <button type="submit" class="btn-search">Search</button>
+        </div>
+        <select name="sdk">
+          <option value="">All SDKs</option>
+          ${sdks.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}
+        </select>
+      </form>
+      ${suggestedQuery ? `<div style="font-size: 11px; color: #1f73b7; margin-bottom: 8px;">💡 Suggested from Ticket: "<strong>${escapeHtml(suggestedQuery)}</strong>"</div>` : ''}
+    </main>
+  `;
+  return layout('Elo SDK Docs', content);
 }
 
-// Classic javadoc leans on named-frame targeting throughout: target=
-// "_top" on nearly every page's "Frames"/"No Frames" toggle (~400
-// occurrences), one external target="_blank", and target="classFrame"/
-// "packageFrame" for the nav pane to update its sibling content pane.
-// _top/_blank try to escape the frame outright and got stripped first —
-// but classFrame/packageFrame turned out to be just as unreliable once
-// nested three iframes deep (Zendesk → the ZAF app → our doc frame →
-// javadoc's own frameset): the browser's named-browsing-context lookup
-// failed to find "classFrame" from within that stack, and per the HTML
-// spec, a target name that resolves to nothing falls back to opening a
-// *brand new top-level browsing context* — a fresh window running our
-// ZAF app from scratch, landing on its default page rather than
-// resuming the click. That's the actual mechanism behind "clicking a
-// class opened a new window showing the home page," not a one-off bug.
-//
-// Rather than chase each named target as it fails in some new way,
-// every target attribute is stripped, full stop. A target-less link
-// always navigates whichever frame it's currently rendered in — no
-// named-context lookup, so no possibility of the "nothing found, open a
-// new window" fallback ever triggering again. The tradeoff: clicking a
-// class in an old-style SDK's nav pane now replaces that pane's own
-// content with the class page, instead of updating a sibling pane while
-// the nav stays visible. Given the ticket sidebar is only ~300px wide
-// to begin with, that's arguably the better layout anyway, not just the
-// safe one.
-const TARGET_ATTR_RE = /\s+target=["'][^"']*["']/gi;
+function renderResults(query, sdkFilter, results, sdks) {
+  let resultsHtml = '';
+  if (results.length === 0) {
+    resultsHtml = `
+      <div class="no-results-card">
+        <div style="font-size: 24px; margin-bottom: 6px;">🔍</div>
+        <h3 style="margin: 0 0 4px 0; font-size: 14px; color: #2f3941;">No matches for "${escapeHtml(query)}"</h3>
+        <p style="font-size: 12px; margin: 0 0 10px 0;">Try a broader keyword or switch the SDK filter.</p>
+        <a href="/" style="font-size: 12px; color: #1f73b7;">Clear search</a>
+      </div>
+    `;
+  } else {
+    resultsHtml = results.map(item => `
+      <div class="card">
+        <div class="card-header">
+          <a class="card-title" href="${escapeHtml(item.url)}">${escapeHtml(item.name)}</a>
+          <span class="card-sdk">${escapeHtml(item.sdk)}</span>
+        </div>
+        <div class="card-desc">${escapeHtml(item.description || item.kind || 'Documentation entry')}</div>
+        <div class="card-actions">
+          <a class="btn-action" href="${escapeHtml(item.url)}">View Docs &rarr;</a>
+          <button type="button" class="btn-action btn-insert-link" data-link="[Elo SDK - ${escapeHtml(item.name)}](${escapeHtml(item.fullUrl || item.url)})">🔗 Insert Link</button>
+        </div>
+      </div>
+    `).join('');
+  }
 
-function stripAllTargetAttributes(html) {
-  return html.replace(TARGET_ATTR_RE, '');
+  const content = `
+    <header>
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h1>Search Results</h1>
+        <a href="/" style="font-size: 12px; color: #1f73b7; text-decoration: none;">&larr; Back</a>
+      </div>
+    </header>
+    <main>
+      <form class="search-box" action="/search" method="get">
+        <div class="search-input-wrap">
+          <input type="search" name="q" value="${escapeHtml(query)}" required />
+          <button type="submit" class="btn-search">Search</button>
+        </div>
+        <select name="sdk">
+          <option value="">All SDKs</option>
+          ${sdks.map(s => `<option value="${escapeHtml(s)}" ${s === sdkFilter ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
+        </select>
+      </form>
+      <div style="font-size: 11px; color: #68737d; margin-bottom: 8px;">Found ${results.length} results for "<strong>${escapeHtml(query)}</strong>"</div>
+      ${resultsHtml}
+    </main>
+  `;
+  return layout(`Search: ${query}`, content);
 }
 
-module.exports = { isNavFramePane, injectBodyBanner, stripAllTargetAttributes };
+module.exports = { renderLanding, renderResults };
