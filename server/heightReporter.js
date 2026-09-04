@@ -28,7 +28,7 @@ const HEIGHT_REPORTER_SCRIPT = `<script>
   if (window.ResizeObserver) {
     new ResizeObserver(report).observe(document.documentElement);
   } else {
-    setInterval(report, 500);
+    setInterval(report, 800);
   }
   report();
 })();
