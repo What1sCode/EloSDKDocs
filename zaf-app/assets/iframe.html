@@ -4,9 +4,7 @@
   <meta charset="utf-8">
   <title>Elo SDK Docs</title>
   <style>
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
     html, body {
       margin: 0;
       padding: 0;
@@ -39,33 +37,68 @@
     (function () {
       var client = ZAFClient.init();
       var FIXED_HEIGHT = '900px';
+      var docsOrigin = null;
 
       function setAppHeight() {
         client.invoke('resize', { width: '100%', height: FIXED_HEIGHT });
       }
 
-      // Initial resize call
       setAppHeight();
 
-      // Re-apply height when ticket/app tab is focused or switched
       client.on('app.activated', function () {
         setAppHeight();
       });
 
-      // Load documentation URL from app settings
-      client.metadata().then(function (metadata) {
+      // Listen for Insert into Ticket actions from the inner docs site
+      window.addEventListener('message', function (event) {
+        if (!docsOrigin || event.origin !== docsOrigin) return;
+        var data = event.data;
+        if (data && data.source === 'elo-sdk-docs') {
+          if (data.action === 'insert_ticket' && typeof data.text === 'string') {
+            client.invoke('ticket.comment.appendText', data.text + '\n\n');
+          }
+        }
+      });
+
+      // Retrieve settings & ticket context
+      Promise.all([
+        client.metadata(),
+        client.get('ticket.subject').catch(function() { return {}; })
+      ]).then(function (results) {
+        var metadata = results[0];
+        var ticketData = results[1] || {};
+        var subject = ticketData['ticket.subject'] || '';
+
         var docsUrl = (metadata.settings && metadata.settings.docsUrl) ? metadata.settings.docsUrl : '';
         var frame = document.getElementById('docs-frame');
         var status = document.getElementById('status');
 
         if (!docsUrl) {
-          status.textContent = 'Configuration error: "docsUrl" setting is missing.';
+          status.textContent = 'Configuration error: "docsUrl" setting is missing in Zendesk App settings.';
           return;
         }
 
-        // Clean trailing slash
         docsUrl = docsUrl.replace(/\/+$/, '');
-        frame.src = docsUrl + '/';
+        try {
+          docsOrigin = new URL(docsUrl).origin;
+        } catch (e) {
+          docsOrigin = docsUrl;
+        }
+
+        // Smart ticket context: Clean subject keywords for suggested search
+        var cleanSubject = subject
+          .replace(/^(re:|fwd:|\s*\[.*?\])/gi, '')
+          .replace(/[^\w\s]/gi, ' ')
+          .trim();
+
+        var initialUrl = docsUrl + '/';
+        if (cleanSubject && cleanSubject.length > 2) {
+          // Pass first 3-4 significant words as suggestion
+          var words = cleanSubject.split(/\s+/).slice(0, 3).join(' ');
+          initialUrl += '?suggest=' + encodeURIComponent(words);
+        }
+
+        frame.src = initialUrl;
 
         frame.onload = function () {
           status.style.display = 'none';
@@ -74,10 +107,10 @@
         };
 
         frame.onerror = function () {
-          status.textContent = 'Could not load documentation at ' + docsUrl + '. Please check the URL or host status.';
+          status.textContent = 'Could not load documentation at ' + docsUrl;
         };
       }).catch(function (err) {
-        document.getElementById('status').textContent = 'Failed to initialize Zendesk App: ' + (err && err.message ? err.message : err);
+        document.getElementById('status').textContent = 'Failed to initialize: ' + (err && err.message ? err.message : err);
       });
     })();
   </script>
