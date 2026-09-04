@@ -1,3 +1,5 @@
+const { HEIGHT_REPORTER_SCRIPT } = require('./heightReporter');
+
 const BODY_OPEN_RE = /<body([^>]*)>/i;
 
 // Classic javadoc's nav panes (packageListFrame / packageFrame — "All
@@ -57,7 +59,7 @@ const SCROLL_OFFSET_STYLE = '<style>html{scroll-padding-top:40px;}</style>';
 // handled individually as their own requests).
 function injectBodyBanner(html, sdk) {
   if (!BODY_OPEN_RE.test(html)) return html;
-  return html.replace(BODY_OPEN_RE, (match, attrs) => `<body${attrs}>${SCROLL_OFFSET_STYLE}${buildBanner(sdk)}`);
+  return html.replace(BODY_OPEN_RE, (match, attrs) => `<body${attrs}>${SCROLL_OFFSET_STYLE}${buildBanner(sdk)}${HEIGHT_REPORTER_SCRIPT}`);
 }
 
 // Classic javadoc leans on named-frame targeting throughout: target=

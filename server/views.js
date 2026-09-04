@@ -1,3 +1,5 @@
+const { HEIGHT_REPORTER_SCRIPT } = require('./heightReporter');
+
 function escapeHtml(s) {
   return String(s)
     .replace(/&/g, '&amp;')
@@ -27,12 +29,8 @@ const BASE_STYLE = `
     }
   }
   * { box-sizing: border-box; }
-  html, body { height: 100%; }
   body {
     margin: 0;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
     background: var(--bg);
     color: var(--fg);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -50,8 +48,7 @@ const BASE_STYLE = `
     color: var(--muted);
     font-size: 13px;
   }
-  main { flex: 1; width: 100%; padding: 16px 20px 40px; max-width: 900px; margin: 0 auto; }
-  main.landing { display: flex; flex-direction: column; justify-content: center; }
+  main { padding: 16px 20px 40px; max-width: 900px; margin: 0 auto; }
   .search-box {
     display: flex;
     gap: 8px;
@@ -157,6 +154,7 @@ ${extraHead}
 </head>
 <body>
 ${body}
+${HEIGHT_REPORTER_SCRIPT}
 </body>
 </html>`;
 }
@@ -195,7 +193,7 @@ function landingPage({ sdks, documentCount, missingFromDevZone = [] }) {
       <h1>Elo SDK Docs</h1>
       <p>${sdks.length} SDK${sdks.length === 1 ? '' : 's'} indexed &middot; ${documentCount} classes/methods/fields searchable</p>
     </header>
-    <main class="landing">
+    <main>
       <form class="search-box" action="/search" method="get">
         <input type="search" name="q" placeholder="Search all SDK docs (class, method, keyword)…" autofocus />
         <select name="sdk">
