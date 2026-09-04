@@ -11,20 +11,12 @@ const { isNavFramePane, injectBodyBanner, stripAllTargetAttributes } = require('
 
 const PORT = process.env.PORT || 3000;
 
-// Which parent origins are allowed to iframe this app. https://*.zendesk.com
-// still didn't work ("refused to connect" persisted) because Zendesk's
-// Agent Workspace loads private apps in a sandboxed iframe *without*
-// allow-same-origin — that gives the app frame an opaque/null origin, and
-// per the CSP spec, ordinary source expressions (scheme+host, even with a
-// wildcard host) never match an opaque origin. Only the literal '*' token
-// does. There's no longer a Basic Auth layer to lean on either (removed —
-// access is via Zendesk SSO reaching the embed in the first place), so
-// this is effectively "anyone with the link," same posture as the docs
-// site itself now.
+// Which parent origins are allowed to iframe this app. 
+// Using '*' ensures sandboxed iframes in Zendesk Agent Workspace 
+// (which have an opaque/null origin) are allowed to embed the application.
 const FRAME_ANCESTORS = '*';
 
 const app = express();
-
 app.disable('x-powered-by');
 
 // Health check runs before auth so Railway's healthcheck doesn't need creds.
@@ -32,27 +24,15 @@ app.get('/healthz', (req, res) => res.status(200).send('ok'));
 
 app.use(
   helmet({
-    // Disabling the classic X-Frame-Options header (defaults to
-    // SAMEORIGIN) is required so Zendesk can iframe this app; CSP
-    // frame-ancestors below is the modern replacement and is scoped
-    // to Zendesk + self only.
+    // Disabling X-Frame-Options to allow framing in Zendesk
     frameguard: false,
-    // Helmet's default Cross-Origin-Resource-Policy: same-origin also
-    // blocks cross-origin iframe embedding, independently of CSP
-    // frame-ancestors and X-Frame-Options — this was the actual cause of
-    // Zendesk's "refused to connect" even after frame-ancestors was
-    // widened. 'cross-origin' hands embedding control entirely to CSP
-    // frame-ancestors, which is what should be gating it.
+    // Cross-Origin-Resource-Policy set to cross-origin to permit iframe loading
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     contentSecurityPolicy: {
       useDefaults: true,
       directives: {
         'frame-ancestors': FRAME_ANCESTORS.split(' '),
-        // The javadoc/help pages themselves ship inline <script> blocks
-        // (frame navigation, the built-in search.js bootstrap on the
-        // newer SDK docs). They're our own vetted, static content — not
-        // user input — so 'unsafe-inline' here is a reasonable tradeoff
-        // to keep that tooling working rather than a real XSS exposure.
+        // Inline scripts are required for legacy Javadoc frame navigation
         'script-src': ["'self'", "'unsafe-inline'"],
         'style-src': ["'self'", "'unsafe-inline'"]
       }
@@ -77,11 +57,7 @@ if (DOCS_USER && DOCS_PASS) {
   );
 }
 
-// This app has been iterated on quickly (frame-embedding/CSP behavior
-// changed across several deploys), and a stale cached copy of a page is
-// indistinguishable from an actual regression when debugging "it behaves
-// differently on another machine." No-store everywhere removes that
-// variable entirely — low cost for a low-traffic internal tool.
+// Prevent stale cached versions across deployments
 app.use((req, res, next) => {
   res.set('Cache-Control', 'no-store');
   next();
@@ -91,43 +67,60 @@ const sdks = listSdks();
 const index = createSearchIndex();
 console.log(`[elo-sdk-docs] indexed ${index.documentCount} entries (pages + methods/fields) across ${sdks.length} SDK(s).`);
 
+// --- Root / Landing Page (Fixed to handle ?suggest= and query parameters safely) ---
 app.get('/', (req, res) => {
-  res.send(landingPage({ sdks, documentCount: index.documentCount, missingFromDevZone: MISSING_FROM_DEV_ZONE }));
+  try {
+    const suggest = (req.query.suggest || req.query.q || '').toString();
+    res.send(
+      landingPage({
+        sdks,
+        documentCount: index.documentCount,
+        missingFromDevZone: MISSING_FROM_DEV_ZONE,
+        suggest
+      })
+    );
+  } catch (err) {
+    console.error('[elo-sdk-docs] Error rendering landing page:', err);
+    res.status(500).send('Internal Server Error while rendering landing page: ' + err.message);
+  }
 });
 
+// --- Search Page ---
 app.get('/search', (req, res) => {
-  res.send(searchPage());
+  try {
+    res.send(searchPage());
+  } catch (err) {
+    console.error('[elo-sdk-docs] Error rendering search page:', err);
+    res.status(500).send('Internal Server Error while rendering search page: ' + err.message);
+  }
 });
 
+// --- API Endpoints ---
 app.get('/api/sdks', (req, res) => {
   res.json(sdks.map(({ slug, name, description }) => ({ slug, name, description })));
 });
 
 app.get('/api/search', (req, res) => {
-  const q = (req.query.q || '').toString();
-  const sdk = (req.query.sdk || '').toString() || undefined;
-  res.json(index.search(q, { sdk }));
+  try {
+    const q = (req.query.q || '').toString();
+    const sdk = (req.query.sdk || '').toString() || undefined;
+    res.json(index.search(q, { sdk }));
+  } catch (err) {
+    console.error('[elo-sdk-docs] Search API error:', err);
+    res.status(500).json({ error: 'Search failed', message: err.message });
+  }
 });
 
 const sdksBySlug = new Map(sdks.map((sdk) => [sdk.slug, sdk]));
 
-// Serve javadoc/help HTML pages with a "back to home/search" banner, since
-// the vendored docs have no idea this app wraps them. Every other static
-// asset (css/js/images) is served as-is below.
-//
-// Old-style javadoc's nav panes (*-frame.html — "All Packages"/"All
-// Classes" in the left column) are skipped: they're meant to stay as
-// plain package/class lists, and a banner crammed into that narrow column
-// would just get duplicated on every pane. Everything else — the main
-// content frame's pages (however many clicks deep) and the modern
-// non-framed SDK docs — gets the banner. See docsBanner.js for why a
-// filename check beats trying to detect frame context per-request.
+// Serve javadoc/help HTML pages with the navigation banner injected
 app.get(/^\/docs\/([^/]+)\/(.+\.html?)$/i, (req, res, next) => {
   const sdk = sdksBySlug.get(req.params[0]);
   if (!sdk) return next();
 
   const relPath = req.params[1];
   const filePath = path.join(sdk.path, relPath);
+
   if (!filePath.startsWith(sdk.path + path.sep)) {
     return res.status(400).send('Bad path');
   }
@@ -139,7 +132,7 @@ app.get(/^\/docs\/([^/]+)\/(.+\.html?)$/i, (req, res, next) => {
   });
 });
 
-// Static javadoc/help trees for each SDK, e.g. /docs/eloviewhomesdk/index.html
+// Static assets (CSS, images, JS, unhandled docs)
 app.use('/docs', express.static(DOCS_ROOT, { extensions: ['html'] }));
 
 app.use((req, res) => {
