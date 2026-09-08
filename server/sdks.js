@@ -10,7 +10,7 @@ const DOCS_ROOT = path.join(__dirname, '..', 'docs');
 // it just falls back to a titleized version of its folder name.
 const KNOWN = {
   'eloviewhomesdk': {
-    name: 'EloView Home SDK',
+    name: 'EloView Home SDK 6.25.520',
     devZoneLabel: 'Device Level SDKs for all EloView enabled devices',
     description: 'EloView Home SDK 6.25.520 — integrate an Android app with EloView (jar + javadoc for the jar\'s APIs).'
   },
