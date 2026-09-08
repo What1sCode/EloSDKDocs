@@ -2,12 +2,13 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const helmet = require('helmet');
-const basicAuth = require('express-basic-auth');
+const cookieParser = require('cookie-parser');
 
 const { DOCS_ROOT, listSdks, MISSING_FROM_DEV_ZONE } = require('./sdks');
 const { createSearchIndex } = require('./searchIndex');
 const { landingPage, searchPage } = require('./views');
 const { isNavFramePane, injectBodyBanner, stripAllTargetAttributes } = require('./docsBanner');
+const { router: authRouter, requireSession, authIsConfigured } = require('./auth');
 
 const PORT = process.env.PORT || 3000;
 
@@ -40,20 +41,18 @@ app.use(
   })
 );
 
-const DOCS_USER = process.env.DOCS_USER;
-const DOCS_PASS = process.env.DOCS_PASS;
+app.use(cookieParser());
 
-if (DOCS_USER && DOCS_PASS) {
-  app.use(
-    basicAuth({
-      users: { [DOCS_USER]: DOCS_PASS },
-      challenge: true,
-      realm: 'Elo SDK Docs'
-    })
-  );
-} else {
+// Auth routes must stay reachable while unauthenticated — they're how a
+// session gets established in the first place.
+app.use('/auth', authRouter);
+
+if (!authIsConfigured()) {
   console.warn(
-    '[elo-sdk-docs] DOCS_USER / DOCS_PASS not set — serving without basic auth. Set both env vars to enable access control.'
+    '[elo-sdk-docs] Zendesk OAuth is not fully configured (missing one or more of ' +
+      'ZENDESK_SUBDOMAIN, ZENDESK_OAUTH_CLIENT_ID, ZENDESK_OAUTH_CLIENT_SECRET, ' +
+      'ZENDESK_REDIRECT_URI, SESSION_SIGNING_SECRET) — every request past /healthz and ' +
+      '/auth will fail closed until these are set.'
   );
 }
 
@@ -62,6 +61,9 @@ app.use((req, res, next) => {
   res.set('Cache-Control', 'no-store');
   next();
 });
+
+// Everything below this line requires a valid Zendesk-verified session.
+app.use(requireSession);
 
 const sdks = listSdks();
 const index = createSearchIndex();
