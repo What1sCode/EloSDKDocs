@@ -52,18 +52,34 @@ function signInPage() {
 </head>
 <body>
   <div class="box">
-    <p>Sign in with your Zendesk account to view Elo SDK docs.</p>
+    <p id="prompt">Sign in with your Zendesk account to view Elo SDK docs.</p>
     <button id="signin">Sign in with Zendesk</button>
   </div>
   <script>
     document.getElementById('signin').addEventListener('click', function () {
       var popup = window.open('/auth/start', 'eloSdkDocsAuth', 'width=520,height=680');
-      var timer = setInterval(function () {
-        if (!popup || popup.closed) {
-          clearInterval(timer);
-          window.location.reload();
-        }
-      }, 500);
+      document.getElementById('prompt').textContent = 'Waiting for sign-in to complete...';
+
+      // Poll our own session state rather than watching the popup window
+      // directly. Zendesk's login pages set Cross-Origin-Opener-Policy,
+      // which severs window.opener the moment the popup navigates there —
+      // so popup.closed can't be trusted to fire once that happens, even
+      // though the popup itself closes fine and sign-in succeeds.
+      var pollTimer = setInterval(function () {
+        fetch('/auth/status', { cache: 'no-store' })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (data.authenticated) {
+              clearInterval(pollTimer);
+              window.location.reload();
+            }
+          })
+          .catch(function () {});
+      }, 1500);
+
+      // Stop polling eventually if something went wrong and the popup was
+      // abandoned, so we're not polling forever in a forgotten tab.
+      setTimeout(function () { clearInterval(pollTimer); }, 5 * 60 * 1000);
     });
   </script>
 </body>
@@ -176,6 +192,29 @@ router.get('/callback', async (req, res) => {
   }
 });
 
+function verifySession(req) {
+  const token = req.cookies[SESSION_COOKIE];
+  if (!token) return null;
+  try {
+    return jwt.verify(token, SESSION_SIGNING_SECRET);
+  } catch (e) {
+    return null;
+  }
+}
+
+// Same-origin polling target for the sign-in page. Deliberately not behind
+// requireSession — this route's whole job is to answer "am I authenticated
+// yet?" without depending on any window/popup relationship, since Zendesk's
+// own login pages set Cross-Origin-Opener-Policy, which severs the
+// opener link the moment the popup navigates there. That makes
+// `popup.closed` polling from the opener unreliable even though the popup
+// itself closes and the sign-in succeeds. Polling our own cookie state
+// instead sidesteps that entirely.
+router.get('/status', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ authenticated: Boolean(verifySession(req)) });
+});
+
 function requireSession(req, res, next) {
   if (!authIsConfigured()) {
     // Fail closed rather than silently serving docs unauthenticated if env vars
@@ -183,14 +222,10 @@ function requireSession(req, res, next) {
     return res.status(500).send('This server is not configured for authentication.');
   }
 
-  const token = req.cookies[SESSION_COOKIE];
-  if (token) {
-    try {
-      req.zendeskUser = jwt.verify(token, SESSION_SIGNING_SECRET);
-      return next();
-    } catch (e) {
-      // Invalid/expired session — fall through to the sign-in gate below.
-    }
+  const session = verifySession(req);
+  if (session) {
+    req.zendeskUser = session;
+    return next();
   }
 
   if (req.path.startsWith('/api/')) {
