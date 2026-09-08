@@ -218,6 +218,33 @@ function isNavFramePane(relPath) {
   );
 }
 
+// Classic pre-Java-9 javadoc ships a <frameset> shell (index.html) that loads
+// a nav pane plus a "classFrame" content pane. There's no <body> for us to
+// inject a banner into, so it gets served raw -- rendering as native split
+// frames inside the already-cramped Zendesk sidebar. Modern (Java 9+)
+// javadoc has no frames at all, which is the single-pane experience we want
+// everywhere. This finds the frameset's own designated content pane so the
+// caller can redirect straight to it instead of serving the frameset itself.
+function findFramesetContentTarget(html) {
+  if (typeof html !== 'string' || !/<frameset[\s>]/i.test(html)) return null;
+
+  const frames = (html.match(/<frame\s[^>]*>/gi) || [])
+    .map((tag) => {
+      const name = tag.match(/\bname\s*=\s*["']([^"']+)["']/i);
+      const src = tag.match(/\bsrc\s*=\s*["']([^"']+)["']/i);
+      return { name: name ? name[1] : '', src: src ? src[1] : '' };
+    })
+    .filter((frame) => frame.src);
+
+  if (!frames.length) return null;
+
+  // "classFrame" is javadoc's own conventional name for the content pane;
+  // fall back to the last <frame> (content pane is always listed last) if
+  // some other frameset shape doesn't use that name.
+  const classFrame = frames.find((frame) => frame.name.toLowerCase() === 'classframe');
+  return (classFrame || frames[frames.length - 1]).src;
+}
+
 function stripAllTargetAttributes(html) {
   if (typeof html !== 'string') return html;
   return html.replace(/\btarget\s*=\s*["']?(_top|_parent|classFrame)["']?/gi, 'target="_self"');
@@ -249,6 +276,7 @@ function injectBodyBanner(html, sdk) {
 
 module.exports = {
   isNavFramePane,
+  findFramesetContentTarget,
   stripAllTargetAttributes,
   injectBodyBanner
 };

@@ -7,7 +7,7 @@ const cookieParser = require('cookie-parser');
 const { DOCS_ROOT, listSdks, MISSING_FROM_DEV_ZONE } = require('./sdks');
 const { createSearchIndex } = require('./searchIndex');
 const { landingPage, searchPage } = require('./views');
-const { isNavFramePane, injectBodyBanner, stripAllTargetAttributes } = require('./docsBanner');
+const { isNavFramePane, findFramesetContentTarget, injectBodyBanner, stripAllTargetAttributes } = require('./docsBanner');
 const { router: authRouter, requireSession, authIsConfigured } = require('./auth');
 
 const PORT = process.env.PORT || 3000;
@@ -129,6 +129,18 @@ app.get(/^\/docs\/([^/]+)\/(.+\.html?)$/i, (req, res, next) => {
 
   fs.readFile(filePath, 'utf8', (err, html) => {
     if (err) return next();
+
+    // Classic frameset shells (index.html on old-style javadoc) have no
+    // <body> to inject a banner into and would otherwise render as native
+    // split frames. Redirect straight to the frameset's own content pane
+    // instead, matching the single-pane experience every other SDK has.
+    const frameTarget = findFramesetContentTarget(html);
+    if (frameTarget) {
+      const relDir = path.posix.dirname(relPath.replace(/\\/g, '/'));
+      const resolved = relDir === '.' ? frameTarget : `${relDir}/${frameTarget}`;
+      return res.redirect(302, `/docs/${sdk.slug}/${resolved}`);
+    }
+
     const safeHtml = stripAllTargetAttributes(html);
     res.type('html').send(isNavFramePane(relPath) ? safeHtml : injectBodyBanner(safeHtml, sdk));
   });
