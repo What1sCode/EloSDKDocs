@@ -10,9 +10,14 @@ const DOCS_ROOT = path.join(__dirname, '..', 'docs');
 // it just falls back to a titleized version of its folder name.
 const KNOWN = {
   'eloviewhomesdk': {
-    name: 'EloView Device Level SDK',
+    name: 'EloView Home SDK',
     devZoneLabel: 'Device Level SDKs for all EloView enabled devices',
     description: 'EloView Home SDK 6.25.520 — integrate an Android app with EloView (jar + javadoc for the jar\'s APIs).'
+  },
+  'eloviewhomesdk-legacy': {
+    name: 'EloView Home SDK 5.33.70 (Legacy)',
+    devZoneLabel: 'Device Level SDKs for all EloView enabled devices',
+    description: 'EloView Home SDK 5.33.70 — superseded by 6.25.520 (package root renamed homesdk → sdk); kept for techs supporting devices still on the older SDK.'
   },
   'elopaypoint-android-sdk': {
     name: 'EloView PayPoint Peripherals SDK',
@@ -24,15 +29,24 @@ const KNOWN = {
     devZoneLabel: 'SDK for Status Light Kit (SLK)',
     description: 'SLK Kit — integrate an Android app with an SLK device on i-Series 2.0.'
   },
-  // Doesn't correspond to anything on the current Dev Zone SDK list — it's
-  // a single utility class (EloSecureUtil), not a peripherals/device SDK.
-  // Flagged rather than force-mapped to a Dev Zone category it doesn't
-  // match; likely a legacy/internal artifact worth confirming with Elo.
+  // Named "Eloview Device Level SDK" in Elo's own download, but the jar
+  // only exposes a single utility class (EloSecureUtil) — not peripheral/
+  // device APIs. Naming is now authoritative; the content being this thin
+  // is still worth confirming with Elo before leaning on it for support.
   'eloviewsdk': {
-    name: 'EloView SDK (legacy/unlisted)',
+    name: 'EloView Device Level SDK',
     devZoneLabel: null,
-    note: "Doesn't match any current Dev Zone SDK entry — contains only one utility class (EloSecureUtil), not peripheral/device APIs. Confirm with Elo before pointing techs here.",
-    description: 'EloView SDK — a single security-utility class (EloSecureUtil). Not one of the four SDKs currently listed on Elo\'s Dev Zone.'
+    note: 'Elo ships this under the name "Eloview Device Level SDK", but it contains only one utility class (EloSecureUtil) — confirm with Elo whether this is the complete/current API before relying on it for support.',
+    description: 'EloView Device Level SDK — a single security-utility class (EloSecureUtil).'
+  },
+  // New drop, no confirmed match on Elo's Dev Zone SDK tab — package is
+  // com.elotouch.elopay.library(.usb/.wifi/.version), distinct from the
+  // com.elo.device package used by EloPayPoint Android SDK above.
+  'elo-peripheral-sdk': {
+    name: 'Elo Peripheral SDK (EloPay)',
+    devZoneLabel: null,
+    note: 'No confirmed Dev Zone category — built for the 7100p peripheral (EloPeripheralSDK 7.000.006.0072+7100p). Distinct package (com.elotouch.elopay.library) from EloPayPoint Android SDK\'s com.elo.device; confirm with Elo if these should be presented as one family.',
+    description: 'Elo Peripheral SDK for the 7100p peripheral — USB/WiFi peripheral control and versioning APIs (com.elotouch.elopay.library).'
   }
 };
 

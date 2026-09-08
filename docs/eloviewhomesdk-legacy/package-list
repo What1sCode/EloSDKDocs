@@ -1,0 +1,10 @@
+com.eloview.homesdk.accountManager
+com.eloview.homesdk.consts
+com.eloview.homesdk.eloview
+com.eloview.homesdk.infoManager
+com.eloview.homesdk.memoryManager
+com.eloview.homesdk.networkManager
+com.eloview.homesdk.otaManager
+com.eloview.homesdk.packageManager
+com.eloview.homesdk.peripheralManager
+com.eloview.homesdk.systemManager
