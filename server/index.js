@@ -9,6 +9,7 @@ const { createSearchIndex } = require('./searchIndex');
 const { landingPage, searchPage } = require('./views');
 const { isNavFramePane, findFramesetContentTarget, injectBodyBanner, stripAllTargetAttributes } = require('./docsBanner');
 const { router: authRouter, requireSession, authIsConfigured } = require('./auth');
+const { router: warrantyRouter } = require('./warranty');
 
 const PORT = process.env.PORT || 3000;
 
@@ -64,6 +65,8 @@ app.use((req, res, next) => {
 
 // Everything below this line requires a valid Zendesk-verified session.
 app.use(requireSession);
+
+app.use(warrantyRouter);
 
 const sdks = listSdks();
 const index = createSearchIndex();
