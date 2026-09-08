@@ -163,7 +163,11 @@ async function lookupWarranty({ region, country, serial }) {
       { timeout: 10000 }
     );
     await page.selectOption('#country', country);
-    await page.fill('#serialNumbers', serial);
+    // The Lookup button is only re-enabled by a keydown handler bound to
+    // this field (counts lines typed). fill() sets the value directly and
+    // only fires input/change, so it never re-enables the button -- type
+    // it as real keystrokes instead.
+    await page.locator('#serialNumbers').pressSequentially(serial, { delay: 20 });
 
     await page.waitForSelector('#warrantySubmit:not(:disabled)', { timeout: 5000 });
     await page.click('#warrantySubmit');
