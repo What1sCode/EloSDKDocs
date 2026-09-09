@@ -63,14 +63,45 @@ app.use((req, res, next) => {
   next();
 });
 
-// Everything below this line requires a valid Zendesk-verified session.
-app.use(requireSession);
+const SDK_DOCS_SERVICE_KEY = process.env.SDK_DOCS_SERVICE_KEY;
+if (!SDK_DOCS_SERVICE_KEY) {
+  console.warn('[elo-sdk-docs] SDK_DOCS_SERVICE_KEY is not set — /api/search and /api/sdks will only accept a signed-in browser session, not trusted server-to-server callers.');
+}
 
-app.use(warrantyRouter);
+// Lets a trusted backend (e.g. the Similar Tickets reranking service) call
+// the search API directly with a shared secret, instead of needing a
+// per-agent Zendesk OAuth browser session like every other route here.
+function requireServiceKeyOrSession(req, res, next) {
+  const provided = req.get('x-api-key');
+  if (SDK_DOCS_SERVICE_KEY && provided === SDK_DOCS_SERVICE_KEY) {
+    return next();
+  }
+  return requireSession(req, res, next);
+}
 
 const sdks = listSdks();
 const index = createSearchIndex();
 console.log(`[elo-sdk-docs] indexed ${index.documentCount} entries (pages + methods/fields) across ${sdks.length} SDK(s).`);
+
+app.get('/api/sdks', requireServiceKeyOrSession, (req, res) => {
+  res.json(sdks.map(({ slug, name, description }) => ({ slug, name, description })));
+});
+
+app.get('/api/search', requireServiceKeyOrSession, (req, res) => {
+  try {
+    const q = (req.query.q || '').toString();
+    const sdk = (req.query.sdk || '').toString() || undefined;
+    res.json(index.search(q, { sdk }));
+  } catch (err) {
+    console.error('[elo-sdk-docs] Search API error:', err);
+    res.status(500).json({ error: 'Search failed', message: err.message });
+  }
+});
+
+// Everything below this line requires a valid Zendesk-verified session.
+app.use(requireSession);
+
+app.use(warrantyRouter);
 
 // --- Root / Landing Page (Fixed to handle ?suggest= and query parameters safely) ---
 app.get('/', (req, res) => {
@@ -97,22 +128,6 @@ app.get('/search', (req, res) => {
   } catch (err) {
     console.error('[elo-sdk-docs] Error rendering search page:', err);
     res.status(500).send('Internal Server Error while rendering search page: ' + err.message);
-  }
-});
-
-// --- API Endpoints ---
-app.get('/api/sdks', (req, res) => {
-  res.json(sdks.map(({ slug, name, description }) => ({ slug, name, description })));
-});
-
-app.get('/api/search', (req, res) => {
-  try {
-    const q = (req.query.q || '').toString();
-    const sdk = (req.query.sdk || '').toString() || undefined;
-    res.json(index.search(q, { sdk }));
-  } catch (err) {
-    console.error('[elo-sdk-docs] Search API error:', err);
-    res.status(500).json({ error: 'Search failed', message: err.message });
   }
 });
 
